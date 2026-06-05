@@ -44,6 +44,17 @@ function createApp({ db, botController }) {
     res.json({ ok: true, completion: dbApi.getCompletion(db, Number(req.params.projectId)) });
   });
 
+  app.get("/api/dashboard/latest", (req, res) => {
+    try {
+      const project = dbApi.findProject(db);
+      if (!project) return res.status(404).json({ ok: false, error: "No projects found" });
+      const dashboard = analysis.buildDashboard(db, project.id);
+      res.json({ ok: true, dashboard });
+    } catch (error) {
+      res.status(404).json({ ok: false, error: error.message });
+    }
+  });
+
   app.get("/api/projects/:projectId/dashboard", (req, res) => {
     try {
       const dashboard = analysis.buildDashboard(db, Number(req.params.projectId));

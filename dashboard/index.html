@@ -104,7 +104,8 @@
     <script>
       const projectSelect = document.getElementById("projectSelect");
       const refreshButton = document.getElementById("refreshButton");
-      const pathProjectId = location.pathname.split("/").filter(Boolean)[1];
+      const pathParts = location.pathname.split("/").filter(Boolean);
+      const pathProjectId = pathParts[0] === "dashboard" && pathParts[1] ? pathParts[1] : "";
 
       function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -125,23 +126,33 @@
 
       async function loadProjects() {
         const { projects } = await fetchJson("/api/projects");
-        projectSelect.innerHTML = projects.map((project) => (
+        const validProjects = projects.filter((project) => project && project.id != null);
+        projectSelect.innerHTML = validProjects.map((project) => (
           `<option value="${project.id}">#${project.id} ${escapeHtml(project.name)} (${escapeHtml(project.status)})</option>`
         )).join("");
 
-        if (!projects.length) {
+        if (!validProjects.length) {
+          projectSelect.innerHTML = `<option value="">No projects</option>`;
+          projectSelect.disabled = true;
+          refreshButton.disabled = true;
           renderEmpty("No projects found yet. Create a project in Telegram first.");
           return;
         }
 
-        const selectedId = pathProjectId && projects.some((project) => String(project.id) === String(pathProjectId))
+        projectSelect.disabled = false;
+        refreshButton.disabled = false;
+        const selectedId = pathProjectId && validProjects.some((project) => String(project.id) === String(pathProjectId))
           ? pathProjectId
-          : projects[0].id;
+          : validProjects[0].id;
         projectSelect.value = selectedId;
         await loadDashboard(selectedId);
       }
 
       async function loadDashboard(projectId) {
+        if (!projectId) {
+          renderEmpty("Select a project to load dashboard analysis.");
+          return;
+        }
         document.getElementById("meta").textContent = "Loading analysis...";
         try {
           const { dashboard } = await fetchJson(`/api/projects/${projectId}/dashboard`);
@@ -225,8 +236,12 @@
         return "";
       }
 
-      projectSelect.addEventListener("change", () => loadDashboard(projectSelect.value));
-      refreshButton.addEventListener("click", () => loadDashboard(projectSelect.value));
+      projectSelect.addEventListener("change", () => {
+        if (projectSelect.value) loadDashboard(projectSelect.value);
+      });
+      refreshButton.addEventListener("click", () => {
+        if (projectSelect.value) loadDashboard(projectSelect.value);
+      });
       loadProjects().catch((error) => renderEmpty(error.message));
     </script>
   </body>
