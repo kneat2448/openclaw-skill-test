@@ -24,6 +24,7 @@ function migrate(db) {
       description TEXT DEFAULT '',
       review_goal TEXT DEFAULT '',
       schedule_at TEXT,
+      review_cadence TEXT DEFAULT '{}',
       status TEXT NOT NULL DEFAULT 'draft',
       question_template TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -115,6 +116,10 @@ function migrate(db) {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  const columns = db.prepare("PRAGMA table_info(projects)").all().map((column) => column.name);
+  if (!columns.includes("review_cadence")) {
+    db.prepare("ALTER TABLE projects ADD COLUMN review_cadence TEXT DEFAULT '{}'").run();
+  }
 }
 
 function nowIso() {
@@ -154,11 +159,19 @@ function clearSetupSession(db, telegramUserId) {
 function createProject(db, input) {
   const questions = input.questions?.length ? input.questions : DEFAULT_QUESTIONS;
   const roster = input.roster || [];
+  const reviewCadence = input.reviewCadence || {
+    cadence: "end",
+    startAt: new Date().toISOString(),
+    endAt: input.scheduleAt || null,
+    reviewDates: input.scheduleAt ? [input.scheduleAt] : [],
+    nextReviewAt: input.scheduleAt || null
+  };
+  const nextReviewAt = reviewCadence.nextReviewAt || input.scheduleAt || null;
   const create = db.transaction(() => {
     const project = db.prepare(`
-      INSERT INTO projects (name, description, review_goal, schedule_at, status, question_template, updated_at)
-      VALUES (?, ?, ?, ?, 'scheduled', ?, ?)
-    `).run(input.name, input.description || "", input.reviewGoal || "", input.scheduleAt || null, JSON.stringify(questions), nowIso());
+      INSERT INTO projects (name, description, review_goal, schedule_at, review_cadence, status, question_template, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?)
+    `).run(input.name, input.description || "", input.reviewGoal || "", nextReviewAt, JSON.stringify(reviewCadence), JSON.stringify(questions), nowIso());
     const projectId = project.lastInsertRowid;
     db.prepare("INSERT INTO project_sensitive_data (project_id, notes) VALUES (?, ?)").run(projectId, input.sensitiveNotes || "");
     const insertMember = db.prepare(`
@@ -168,7 +181,7 @@ function createProject(db, input) {
     for (const member of roster) {
       insertMember.run(projectId, member.name, member.role || "", member.telegramUserId ? String(member.telegramUserId) : null);
     }
-    registerWorkflow(db, projectId, input.scheduleAt || null);
+    registerWorkflow(db, projectId, nextReviewAt, { reviewCadence });
     generateAssignments(db, projectId);
     return projectId;
   });
@@ -212,7 +225,11 @@ function generateAssignments(db, projectId) {
 function getProject(db, projectId) {
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId);
   if (!project) return null;
-  return { ...project, questionTemplate: parseJson(project.question_template, DEFAULT_QUESTIONS) };
+  return {
+    ...project,
+    questionTemplate: parseJson(project.question_template, DEFAULT_QUESTIONS),
+    reviewCadence: parseJson(project.review_cadence, {})
+  };
 }
 
 function listProjects(db) {

@@ -6,7 +6,7 @@ Use this file when asking an OpenClaw agent to install, configure, run, or opera
 
 Implement the entire `peer-review-workflow` folder as a Telegram-first peer review service with OpenClaw as the automation/orchestration layer.
 
-The Node app is the domain service. It owns SQLite data, Telegram review flows, review parsing, analysis, exports, and dashboard generation. OpenClaw owns recurring automation: starting scheduled reviews, sending reminders, checking completion, triggering analysis, reconciling missed schedules, and notifying the tech lead.
+The Node app is the domain service. It owns SQLite data, Telegram review flows, review cadence, review parsing, analysis, exports, and dashboard generation. OpenClaw owns recurring automation: starting scheduled reviews, sending reminders, checking completion, triggering analysis, reconciling missed schedules, and notifying the tech lead.
 
 ## Repository Contract
 
@@ -36,6 +36,16 @@ PORT=3000
 DB_PATH=./data/peer_review.db
 APP_TIME_ZONE=Asia/Kolkata
 AUTO_ANALYZE_ON_COMPLETE=true
+```
+
+Project creation asks for cadence, not a one-off launch date. The end-of-project review is always mandatory. Supported cadence examples:
+
+```text
+weekly | end: 2026-08-30T17:00:00+05:30
+biweekly | end: 2026-08-30T17:00:00+05:30
+halfway | end: 2026-08-30T17:00:00+05:30
+halfway and end | end: 2026-08-30T17:00:00+05:30
+end | end: 2026-08-30T17:00:00+05:30
 ```
 
 If running locally, expose `PORT` with a stable tunnel such as ngrok, localtunnel, Tailscale, or another approved OpenClaw remote-access path, then set `BASE_URL` to that public URL.
@@ -138,7 +148,7 @@ Missed-schedule reconciliation uses:
 Create these OpenClaw automations or equivalent recurring tasks:
 
 1. Scheduled launch
-   - Trigger: each project's `openclaw_workflows.next_run_at`.
+   - Trigger: each project's `openclaw_workflows.next_run_at`, derived from review cadence.
    - Action: `POST $BASE_URL/internal/openclaw/startReviewRound`.
 
 2. Reminder loop
@@ -180,6 +190,7 @@ export reviews [project]
 Reviewer behavior:
 
 - Each reviewer reviews every teammate except themselves.
+- Cadence controls when review rounds happen; the final end-of-project review is always included.
 - One message equals one teammate review.
 - Keep reviewer identity anonymous in dashboard output.
 - Sensitive project notes must never be included in dashboard JSON, anonymous exports, logs, or analysis output.

@@ -5,7 +5,7 @@ Telegram-first peer review MVP with SQLite storage, anonymous dashboard output, 
 ## What It Does
 
 - Tech lead creates a project through guided Telegram prompts.
-- The app stores project details, roster, schedule, question template, and sensitive notes separately.
+- The app stores project details, roster, cadence, question template, and sensitive notes separately.
 - Each reviewer is assigned every teammate except themselves.
 - Reviewers submit one structured message per teammate.
 - OpenClaw can trigger review starts, reminders, completion checks, analysis, and alerts through internal endpoints.
@@ -60,6 +60,26 @@ Could improve delivery speed.
 
 Recommendation:
 Good fit.
+```
+
+## Project Review Cadence
+
+During `create project`, the bot asks for cadence instead of a single launch timestamp. The end-of-project review is always mandatory.
+
+Examples:
+
+```text
+weekly | end: 2026-08-30T17:00:00+05:30
+biweekly | end: 2026-08-30T17:00:00+05:30
+halfway | end: 2026-08-30T17:00:00+05:30
+halfway and end | end: 2026-08-30T17:00:00+05:30
+end | end: 2026-08-30T17:00:00+05:30
+```
+
+Optional start date:
+
+```text
+weekly | start: 2026-06-10T10:00:00+05:30 | end: 2026-08-30T17:00:00+05:30
 ```
 
 ## OpenClaw Endpoints

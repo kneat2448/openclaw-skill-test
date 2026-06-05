@@ -11,6 +11,7 @@ Telegram users
   -> peer-review Telegram bot
   -> peer-review Node app on localhost:3001
   -> SQLite database in ./data/peer_review.db
+  -> cadence-based review schedule
   -> dashboard at https://your-domain.example/dashboard/:projectId
 
 OpenClaw on Hostinger
@@ -204,6 +205,21 @@ Check app status:
 pm2 status
 curl http://127.0.0.1:3001/api/projects
 ```
+
+After pulling cadence changes from Git, restart the app and automation scheduler:
+
+```bash
+cd /opt/peer-review-workflow
+git pull
+npm install
+npm run check
+npm test
+pm2 restart peer-review-workflow --update-env
+pm2 restart peer-review-openclaw-automation --update-env
+pm2 save
+```
+
+The SQLite migration is automatic. The app keeps `projects.schedule_at` as the next due review for OpenClaw compatibility and stores full cadence metadata in `projects.review_cadence`.
 
 Check dashboard:
 

@@ -13,6 +13,7 @@ function createOrchestration({ db, notifier = null }) {
     if (!project) throw new Error(`Project ${projectId} not found`);
     const workflow = dbApi.registerWorkflow(db, projectId, project.schedule_at, {
       automationLayer: "openclaw",
+      reviewCadence: project.reviewCadence,
       commands: ["startReviewRound", "sendReminder", "checkCompletion", "runAnalysis", "notifyLead"]
     });
     return { ok: true, workflow };

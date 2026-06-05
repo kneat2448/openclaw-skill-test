@@ -2,6 +2,7 @@ const config = require("./config");
 const dbApi = require("./db");
 const analysis = require("./analysis");
 const { DEFAULT_QUESTIONS } = require("./questions");
+const { parseCadenceInput, describeCadence } = require("./cadence");
 const {
   parseReviewMessage,
   formatReviewTemplate,
@@ -13,7 +14,7 @@ const SETUP_STEPS = [
   "description",
   "reviewGoal",
   "roster",
-  "scheduleAt",
+  "reviewCadence",
   "questions",
   "sensitiveNotes",
   "confirm"
@@ -204,12 +205,14 @@ function createBot({ db, telegramBot = null }) {
         await sendMessage(msg.chat.id, "Please send exactly 15 questions, or type `default`.");
         return;
       }
-    } else if (step === "scheduleAt") {
-      nextPayload.scheduleAt = parseSchedule(text);
-      if (!nextPayload.scheduleAt) {
-        await sendMessage(msg.chat.id, "Please send an ISO date/time like 2026-06-06T10:00:00+05:30, or type `now`.");
+    } else if (step === "reviewCadence") {
+      const parsedCadence = parseCadenceInput(text);
+      if (!parsedCadence.ok) {
+        await sendMessage(msg.chat.id, cadenceHelp(parsedCadence.error));
         return;
       }
+      nextPayload.reviewCadence = parsedCadence;
+      nextPayload.scheduleAt = parsedCadence.nextReviewAt;
     } else {
       nextPayload[step] = text;
     }
@@ -361,7 +364,7 @@ function promptForStep(step) {
     description: "Project description/context?",
     reviewGoal: "Review goal?",
     roster: "Team roster, one per line: Name | Role | Telegram user ID. Leave Telegram ID blank if unknown.",
-    scheduleAt: "Review launch time? Send ISO date/time like 2026-06-06T10:00:00+05:30, or type `now`.",
+    reviewCadence: cadenceHelp(),
     questions: "Send exactly 15 review questions, one per line, or type `default`.",
     sensitiveNotes: "Sensitive notes/contracts/terms? Send `none` if empty."
   };
@@ -375,7 +378,9 @@ function formatProjectPreview(payload) {
     `Description: ${payload.description}`,
     `Goal: ${payload.reviewGoal}`,
     `Roster: ${payload.roster.map((member) => member.name).join(", ")}`,
-    `Schedule: ${payload.scheduleAt}`,
+    `Cadence: ${describeCadence(payload.reviewCadence.cadence)}`,
+    `First review: ${payload.reviewCadence.nextReviewAt}`,
+    `Mandatory end review: ${payload.reviewCadence.endAt}`,
     `Questions: ${payload.questions.length}`,
     `Sensitive notes: ${payload.sensitiveNotes && !/^none$/i.test(payload.sensitiveNotes) ? "stored separately" : "none"}`
   ].join("\n");
@@ -404,6 +409,22 @@ function helpText() {
     "status [project]",
     "export reviews [project]"
   ].join("\n");
+}
+
+function cadenceHelp(error = "") {
+  const prefix = error ? `I could not understand that cadence (${error}).\n\n` : "";
+  return `${prefix}Review cadence? Send one of:
+
+weekly | end: 2026-08-30T17:00:00+05:30
+biweekly | end: 2026-08-30T17:00:00+05:30
+halfway | end: 2026-08-30T17:00:00+05:30
+halfway and end | end: 2026-08-30T17:00:00+05:30
+end | end: 2026-08-30T17:00:00+05:30
+
+Optional start date:
+weekly | start: 2026-06-10T10:00:00+05:30 | end: 2026-08-30T17:00:00+05:30
+
+The end-of-project peer review is always mandatory.`;
 }
 
 module.exports = {
