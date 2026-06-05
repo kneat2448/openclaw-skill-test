@@ -26,6 +26,10 @@ function createApp({ db, botController }) {
     res.json({ ok: true, app: "peer-review-workflow" });
   });
 
+  app.get("/dashboard", (req, res) => {
+    res.sendFile(path.join(config.rootDir, "dashboard", "index.html"));
+  });
+
   app.get("/dashboard/:projectId", (req, res) => {
     res.sendFile(path.join(config.rootDir, "dashboard", "index.html"));
   });
@@ -38,6 +42,24 @@ function createApp({ db, botController }) {
 
   app.get("/api/projects/:projectId/status", (req, res) => {
     res.json({ ok: true, completion: dbApi.getCompletion(db, Number(req.params.projectId)) });
+  });
+
+  app.get("/api/projects/:projectId/dashboard", (req, res) => {
+    try {
+      const dashboard = analysis.buildDashboard(db, Number(req.params.projectId));
+      res.json({ ok: true, dashboard });
+    } catch (error) {
+      res.status(404).json({ ok: false, error: error.message });
+    }
+  });
+
+  app.post("/api/projects/:projectId/analyze", (req, res) => {
+    try {
+      const dashboard = analysis.writeDashboard(db, Number(req.params.projectId));
+      res.json({ ok: true, dashboard });
+    } catch (error) {
+      res.status(404).json({ ok: false, error: error.message });
+    }
   });
 
   app.get("/api/projects/:projectId/export", (req, res) => {

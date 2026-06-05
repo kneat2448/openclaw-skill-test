@@ -227,6 +227,13 @@ Check dashboard:
 https://reviews.your-domain.example/dashboard/<projectId>
 ```
 
+If the dashboard says analysis data is missing after an update, verify the live API:
+
+```bash
+curl http://127.0.0.1:3001/api/projects
+curl http://127.0.0.1:3001/api/projects/1/dashboard
+```
+
 ## Security Notes
 
 - Keep `/internal/openclaw/*` protected by `OPENCLAW_API_TOKEN`.

@@ -3,6 +3,24 @@ const path = require("path");
 const config = require("./config");
 const dbApi = require("./db");
 
+const QUESTION_DIMENSIONS = [
+  "Reliability",
+  "Quality",
+  "Ownership",
+  "Communication",
+  "Collaboration",
+  "Judgment",
+  "Responsiveness",
+  "Problem solving",
+  "Adaptability",
+  "Leadership",
+  "Trust",
+  "Impact",
+  "Expectation fit",
+  "Growth",
+  "Overall"
+];
+
 function average(values) {
   if (!values.length) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -50,6 +68,17 @@ function buildDashboard(db, projectId) {
     const allScores = received.flatMap((response) => response.scores);
     const avg = average(allScores);
     const varianceValue = variance(allScores);
+    const dimensions = QUESTION_DIMENSIONS.map((dimension, index) => {
+      const values = received.map((response) => response.scores[index]).filter((score) => Number.isFinite(score));
+      const dimensionAverage = average(values);
+      return {
+        name: dimension,
+        average: dimensionAverage,
+        averageDisplay: dimensionAverage == null ? "No data" : dimensionAverage.toFixed(1)
+      };
+    });
+    const strongest = dimensions.filter((item) => item.average != null).sort((a, b) => b.average - a.average).slice(0, 3);
+    const weakest = dimensions.filter((item) => item.average != null).sort((a, b) => a.average - b.average).slice(0, 3);
     return {
       memberId: member.id,
       memberName: member.name,
@@ -59,14 +88,28 @@ function buildDashboard(db, projectId) {
       averageDisplay: avg == null ? "No responses" : avg.toFixed(1),
       variance: Number(varianceValue.toFixed(2)),
       confidence: confidenceFor(received.length, expectedPerMember),
-      risk: riskFor(avg, varianceValue, received.length)
+      risk: riskFor(avg, varianceValue, received.length),
+      strongestDimensions: strongest,
+      growthDimensions: weakest,
+      comments: {
+        strengths: received.map((response) => response.strengths).filter(Boolean),
+        concerns: received.map((response) => response.concerns).filter(Boolean),
+        recommendations: received.map((response) => response.recommendation).filter(Boolean)
+      }
     };
   });
 
+  const sortedByAverage = teamMatrix
+    .filter((row) => row.average != null)
+    .sort((a, b) => b.average - a.average);
+
   const narrative = {
+    summary: buildNarrativeSummary(teamMatrix, completion),
     strengths: summarizeText(responses, "strengths"),
     concerns: summarizeText(responses, "concerns"),
-    recurringThemes: inferThemes(responses)
+    recommendations: summarizeText(responses, "recommendation"),
+    recurringThemes: inferThemes(responses),
+    outliers: findOutliers(teamMatrix)
   };
 
   const decisionScorecard = teamMatrix.map((row) => ({
@@ -75,6 +118,7 @@ function buildDashboard(db, projectId) {
     readiness: row.average == null ? "Unknown" : row.average >= 8 ? "High" : row.average >= 6.5 ? "Medium" : "Low",
     fit: row.average == null ? "Unknown" : row.average >= 7 ? "Good" : "Needs discussion",
     risk: row.risk,
+    suggestedAction: suggestedAction(row),
     note: "Advisory only; use alongside manager judgment and context."
   }));
 
@@ -88,6 +132,12 @@ function buildDashboard(db, projectId) {
       status: project.status
     },
     coverage: completion,
+    analysis: {
+      projectAverage: average(teamMatrix.map((row) => row.average).filter((value) => value != null)),
+      topSignals: sortedByAverage.slice(0, 3).map((row) => ({ memberName: row.memberName, average: row.averageDisplay })),
+      needsAttention: teamMatrix.filter((row) => ["High", "Medium", "Unknown"].includes(row.risk))
+        .map((row) => ({ memberName: row.memberName, risk: row.risk, confidence: row.confidence }))
+    },
     teamMatrix,
     narrative,
     decisionScorecard,
@@ -100,11 +150,43 @@ function buildDashboard(db, projectId) {
 
 function inferThemes(responses) {
   const text = responses.map((response) => `${response.strengths} ${response.concerns} ${response.recommendation}`).join(" ").toLowerCase();
-  const themes = [];
-  for (const term of ["communication", "ownership", "quality", "speed", "collaboration", "leadership", "reliability"]) {
-    if (text.includes(term)) themes.push(term);
-  }
-  return themes;
+  const terms = ["communication", "ownership", "quality", "speed", "collaboration", "leadership", "reliability", "trust", "impact", "growth"];
+  return terms
+    .map((term) => ({ theme: term, count: (text.match(new RegExp(term, "g")) || []).length }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .map((item) => item.theme);
+}
+
+function buildNarrativeSummary(teamMatrix, completion) {
+  if (!completion.total) return "No review assignments exist yet.";
+  if (!completion.submitted) return "Review assignments exist, but no responses have been submitted yet.";
+  const covered = teamMatrix.filter((row) => row.responseCount > 0).length;
+  const highRisk = teamMatrix.filter((row) => row.risk === "High").length;
+  const mediumRisk = teamMatrix.filter((row) => row.risk === "Medium").length;
+  return `${completion.submitted}/${completion.total} reviews are submitted across ${covered}/${teamMatrix.length} teammates. ${highRisk} high-risk and ${mediumRisk} medium-risk teammates need follow-up.`;
+}
+
+function findOutliers(teamMatrix) {
+  const scored = teamMatrix.filter((row) => row.average != null);
+  if (scored.length < 2) return [];
+  const projectAverage = average(scored.map((row) => row.average));
+  return scored
+    .filter((row) => Math.abs(row.average - projectAverage) >= 1.5 || row.variance >= 4)
+    .map((row) => ({
+      memberName: row.memberName,
+      averageDisplay: row.averageDisplay,
+      variance: row.variance,
+      reason: row.variance >= 4 ? "reviewers disagree materially" : "score differs from team average"
+    }));
+}
+
+function suggestedAction(row) {
+  if (row.average == null) return "Collect responses before making a call.";
+  if (row.risk === "High") return "Schedule a manager review before any decision.";
+  if (row.risk === "Medium") return "Discuss growth areas and validate with context.";
+  if (row.average >= 8) return "Recognize strong performance and consider stretch ownership.";
+  return "Continue with normal follow-up.";
 }
 
 function writeDashboard(db, projectId) {
@@ -130,6 +212,7 @@ function exportAnonymousReviews(db, projectId) {
 }
 
 module.exports = {
+  QUESTION_DIMENSIONS,
   buildDashboard,
   writeDashboard,
   exportAnonymousReviews

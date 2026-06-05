@@ -6,7 +6,7 @@ Use this file when asking an OpenClaw agent to install, configure, run, or opera
 
 Implement the entire `peer-review-workflow` folder as a Telegram-first peer review service with OpenClaw as the automation/orchestration layer.
 
-The Node app is the domain service. It owns SQLite data, Telegram review flows, review cadence, review parsing, analysis, exports, and dashboard generation. OpenClaw owns recurring automation: starting scheduled reviews, sending reminders, checking completion, triggering analysis, reconciling missed schedules, and notifying the tech lead.
+The Node app is the domain service. It owns SQLite data, Telegram review flows, review cadence, review parsing, live dashboard analysis, exports, and dashboard generation. OpenClaw owns recurring automation: starting scheduled reviews, sending reminders, checking completion, triggering analysis, reconciling missed schedules, and notifying the tech lead.
 
 ## Repository Contract
 

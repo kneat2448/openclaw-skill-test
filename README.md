@@ -9,7 +9,7 @@ Telegram-first peer review MVP with SQLite storage, anonymous dashboard output, 
 - Each reviewer is assigned every teammate except themselves.
 - Reviewers submit one structured message per teammate.
 - OpenClaw can trigger review starts, reminders, completion checks, analysis, and alerts through internal endpoints.
-- Dashboard output is anonymous by default and includes a team matrix, narrative report, and decision scorecard.
+- Dashboard output is anonymous by default and includes a project dropdown, live analysis, a team matrix, narrative report, and decision scorecard.
 
 ## Local Setup
 
@@ -103,6 +103,10 @@ See [openclaw/peer-review-workflow.md](openclaw/peer-review-workflow.md) for the
 For a full prompt/instruction file that can be handed to an OpenClaw agent, use [OPENCLAW_AGENT_IMPLEMENTATION.md](OPENCLAW_AGENT_IMPLEMENTATION.md).
 
 For deploying beside an existing OpenClaw instance on Hostinger, use [HOSTINGER_OPENCLAW_SETUP.md](HOSTINGER_OPENCLAW_SETUP.md).
+
+## Dashboard Analysis
+
+The dashboard loads projects from `/api/projects` and analysis from `/api/projects/:projectId/dashboard`. It no longer depends on generated JSON files being present, though `analyze reviews [project]` still writes dashboard JSON for compatibility.
 
 ## Verification
 
