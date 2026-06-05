@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Peer Review Dashboard</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #f6f7f9; color: #1f2933; }
+      main { max-width: 1120px; margin: 0 auto; padding: 32px 20px; }
+      h1 { margin: 0 0 8px; font-size: 28px; }
+      h2 { margin-top: 28px; font-size: 20px; }
+      table { width: 100%; border-collapse: collapse; background: white; }
+      th, td { padding: 10px 12px; border-bottom: 1px solid #e3e8ef; text-align: left; }
+      th { background: #edf2f7; font-size: 13px; text-transform: uppercase; }
+      .panel { background: white; border: 1px solid #e3e8ef; border-radius: 8px; padding: 16px; margin-top: 16px; }
+      .muted { color: #697586; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="title">Peer Review Dashboard</h1>
+      <p id="meta" class="muted"></p>
+      <section class="panel">
+        <h2>Team Matrix</h2>
+        <table>
+          <thead><tr><th>Member</th><th>Responses</th><th>Average</th><th>Confidence</th><th>Risk</th></tr></thead>
+          <tbody id="matrix"></tbody>
+        </table>
+      </section>
+      <section class="panel">
+        <h2>Narrative Report</h2>
+        <div id="narrative"></div>
+      </section>
+      <section class="panel">
+        <h2>Decision Scorecard</h2>
+        <div id="scorecard" class="grid"></div>
+      </section>
+    </main>
+    <script>
+      const projectId = location.pathname.split("/").filter(Boolean).pop();
+      fetch(`/data/${projectId}.json`).then((res) => res.json()).then((data) => {
+        document.title = `${data.project.name} - Peer Review Dashboard`;
+        document.getElementById("title").textContent = data.project.name;
+        document.getElementById("meta").textContent = `${data.coverage.submitted}/${data.coverage.total} reviews submitted`;
+        document.getElementById("matrix").innerHTML = data.teamMatrix.map((row) => `
+          <tr><td>${row.memberName}</td><td>${row.responseDisplay}</td><td>${row.averageDisplay}</td><td>${row.confidence}</td><td>${row.risk}</td></tr>
+        `).join("");
+        document.getElementById("narrative").innerHTML = `
+          <p><strong>Strengths:</strong> ${data.narrative.strengths.join("; ") || "No themes yet"}</p>
+          <p><strong>Concerns:</strong> ${data.narrative.concerns.join("; ") || "No concerns yet"}</p>
+          <p><strong>Recurring themes:</strong> ${data.narrative.recurringThemes.join("; ") || "No recurring themes yet"}</p>
+        `;
+        document.getElementById("scorecard").innerHTML = data.decisionScorecard.map((item) => `
+          <div><strong>${item.memberName}</strong><br>${item.readiness} readiness<br>${item.fit} fit<br>${item.risk} risk</div>
+        `).join("");
+      }).catch(() => {
+        document.getElementById("meta").textContent = "Dashboard data was not found. Run analysis first.";
+      });
+    </script>
+  </body>
+</html>
