@@ -2,7 +2,7 @@ const config = require("./config");
 const dbApi = require("./db");
 const analysis = require("./analysis");
 const { DEFAULT_QUESTIONS } = require("./questions");
-const { parseCadenceInput, describeCadence } = require("./cadence");
+const { parseCadenceInput, parseProjectLengthInput, describeCadence } = require("./cadence");
 const {
   parseReviewMessage,
   formatReviewTemplate,
@@ -14,6 +14,7 @@ const SETUP_STEPS = [
   "description",
   "reviewGoal",
   "roster",
+  "projectLength",
   "reviewCadence",
   "questions",
   "sensitiveNotes",
@@ -89,9 +90,10 @@ function createBot({ db, telegramBot = null }) {
   }
 
   async function sendReminder(assignment) {
+    const project = dbApi.getProject(db, assignment.project_id);
     await sendMessage(
       assignment.delivery_user_id,
-      `Reminder: please submit your review for ${assignment.reviewee_name}.\n\n${formatReviewTemplate(assignment)}`
+      `Reminder: please submit your review for ${assignment.reviewee_name}.\n\n${formatReviewTemplate(assignment, project?.questionTemplate)}`
     );
   }
 
@@ -157,7 +159,8 @@ function createBot({ db, telegramBot = null }) {
       dbApi.setProjectStatus(db, project.id, "collecting");
       await sendMessage(msg.chat.id, `Resumed ${project.name}.`);
     } else if (command === "send reminder") {
-      const open = dbApi.getAssignments(db, project.id).filter((assignment) => assignment.status !== "submitted");
+      const open = dbApi.getAssignments(db, project.id)
+        .filter((assignment) => ["pending", "in_progress", "needs_fix"].includes(assignment.status));
       for (const assignment of open) await sendReminder(assignment);
       await sendMessage(msg.chat.id, `Sent ${open.length} reminders.`);
     } else if (command === "analyze reviews") {
@@ -205,8 +208,18 @@ function createBot({ db, telegramBot = null }) {
         await sendMessage(msg.chat.id, "Please send exactly 15 questions, or type `default`.");
         return;
       }
+    } else if (step === "projectLength") {
+      const parsedLength = parseProjectLengthInput(text);
+      if (!parsedLength.ok) {
+        await sendMessage(msg.chat.id, projectLengthHelp(parsedLength.error));
+        return;
+      }
+      nextPayload.projectLength = parsedLength;
     } else if (step === "reviewCadence") {
-      const parsedCadence = parseCadenceInput(text);
+      const parsedCadence = parseCadenceInput(text, new Date(nextPayload.projectLength.startAt), {
+        startAt: nextPayload.projectLength.startAt,
+        endAt: nextPayload.projectLength.endAt
+      });
       if (!parsedCadence.ok) {
         await sendMessage(msg.chat.id, cadenceHelp(parsedCadence.error));
         return;
@@ -364,6 +377,7 @@ function promptForStep(step) {
     description: "Project description/context?",
     reviewGoal: "Review goal?",
     roster: "Team roster, one per line: Name | Role | Telegram user ID. Leave Telegram ID blank if unknown.",
+    projectLength: projectLengthHelp(),
     reviewCadence: cadenceHelp(),
     questions: "Send exactly 15 review questions, one per line, or type `default`.",
     sensitiveNotes: "Sensitive notes/contracts/terms? Send `none` if empty."
@@ -378,6 +392,7 @@ function formatProjectPreview(payload) {
     `Description: ${payload.description}`,
     `Goal: ${payload.reviewGoal}`,
     `Roster: ${payload.roster.map((member) => member.name).join(", ")}`,
+    `Project length: ${payload.projectLength.startAt} to ${payload.projectLength.endAt}`,
     `Cadence: ${describeCadence(payload.reviewCadence.cadence)}`,
     `First review: ${payload.reviewCadence.nextReviewAt}`,
     `Mandatory end review: ${payload.reviewCadence.endAt}`,
@@ -415,16 +430,26 @@ function cadenceHelp(error = "") {
   const prefix = error ? `I could not understand that cadence (${error}).\n\n` : "";
   return `${prefix}Review cadence? Send one of:
 
-weekly | end: 2026-08-30T17:00:00+05:30
-biweekly | end: 2026-08-30T17:00:00+05:30
-halfway | end: 2026-08-30T17:00:00+05:30
-halfway and end | end: 2026-08-30T17:00:00+05:30
-end | end: 2026-08-30T17:00:00+05:30
+weekly
+biweekly
+halfway
+halfway and end
+end
 
 Optional start date:
-weekly | start: 2026-06-10T10:00:00+05:30 | end: 2026-08-30T17:00:00+05:30
+weekly | start: 2026-06-10T10:00:00+05:30
 
 The end-of-project peer review is always mandatory.`;
+}
+
+function projectLengthHelp(error = "") {
+  const prefix = error ? `I could not understand the project length (${error}).\n\n` : "";
+  return `${prefix}How long is the project?
+
+Examples:
+12 weeks
+3 months
+until 2026-08-30T17:00:00+05:30`;
 }
 
 module.exports = {

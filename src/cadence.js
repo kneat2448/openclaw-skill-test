@@ -18,14 +18,16 @@ function normalizeCadenceName(value) {
   return normalized;
 }
 
-function parseCadenceInput(text, now = new Date()) {
+function parseCadenceInput(text, now = new Date(), defaults = {}) {
   const input = String(text || "").trim();
   const parts = input.split("|").map((part) => part.trim()).filter(Boolean);
   const cadence = normalizeCadenceName(parts[0]);
   if (!VALID_CADENCES.has(cadence)) return { ok: false, error: "unknown_cadence" };
 
-  let startAt = now;
-  let endAt = null;
+  let startAt = defaults.startAt ? parseDateOrNow(defaults.startAt, now) : now;
+  let endAt = defaults.endAt ? parseDateOrNow(defaults.endAt, now) : null;
+  if (!startAt) return { ok: false, error: "invalid_start" };
+  if (defaults.endAt && !endAt) return { ok: false, error: "invalid_end" };
 
   for (const part of parts.slice(1)) {
     const [rawKey, ...rawValue] = part.split(":");
@@ -58,9 +60,48 @@ function parseCadenceInput(text, now = new Date()) {
 }
 
 function parseDateOrNow(value, now) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : new Date(value);
   if (/^now$/i.test(value)) return new Date(now);
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseProjectLengthInput(text, now = new Date()) {
+  const input = String(text || "").trim();
+  if (!input) return { ok: false, error: "missing_project_length" };
+
+  const dateText = input.replace(/^(until|through|end|ends|end date)\s*:?\s*/i, "");
+  const endDate = parseDateOrNow(dateText, now);
+  if (endDate) return formatProjectLength(now, endDate);
+
+  const match = input.match(/^(\d+)\s*(d|day|days|w|week|weeks|mo|month|months|y|year|years)$/i);
+  if (!match) return { ok: false, error: "invalid_project_length" };
+
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "invalid_project_length" };
+
+  const unit = match[2].toLowerCase();
+  const endAt = new Date(now);
+  if (["d", "day", "days"].includes(unit)) {
+    endAt.setUTCDate(endAt.getUTCDate() + amount);
+  } else if (["w", "week", "weeks"].includes(unit)) {
+    endAt.setUTCDate(endAt.getUTCDate() + amount * 7);
+  } else if (["mo", "month", "months"].includes(unit)) {
+    endAt.setUTCMonth(endAt.getUTCMonth() + amount);
+  } else {
+    endAt.setUTCFullYear(endAt.getUTCFullYear() + amount);
+  }
+
+  return formatProjectLength(now, endAt);
+}
+
+function formatProjectLength(startAt, endAt) {
+  if (endAt <= startAt) return { ok: false, error: "project_length_in_past" };
+  return {
+    ok: true,
+    startAt: new Date(startAt).toISOString(),
+    endAt: new Date(endAt).toISOString()
+  };
 }
 
 function computeReviewDates({ cadence, startAt, endAt }) {
@@ -100,6 +141,7 @@ function describeCadence(cadence) {
 
 module.exports = {
   parseCadenceInput,
+  parseProjectLengthInput,
   computeReviewDates,
   describeCadence,
   normalizeCadenceName

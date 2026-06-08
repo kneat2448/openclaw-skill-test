@@ -62,24 +62,32 @@ Recommendation:
 Good fit.
 ```
 
-## Project Review Cadence
+## Project Length And Review Cadence
 
-During `create project`, the bot asks for cadence instead of a single launch timestamp. The end-of-project review is always mandatory.
+During `create project`, the bot asks the tech lead how long the project is, then asks for the review cadence. The end-of-project review is always mandatory.
 
-Examples:
+Project length examples:
 
 ```text
-weekly | end: 2026-08-30T17:00:00+05:30
-biweekly | end: 2026-08-30T17:00:00+05:30
-halfway | end: 2026-08-30T17:00:00+05:30
-halfway and end | end: 2026-08-30T17:00:00+05:30
-end | end: 2026-08-30T17:00:00+05:30
+12 weeks
+3 months
+until 2026-08-30T17:00:00+05:30
 ```
 
-Optional start date:
+Cadence examples:
 
 ```text
-weekly | start: 2026-06-10T10:00:00+05:30 | end: 2026-08-30T17:00:00+05:30
+weekly
+biweekly
+halfway
+halfway and end
+end
+```
+
+Optional cadence start date:
+
+```text
+weekly | start: 2026-06-10T10:00:00+05:30
 ```
 
 ## OpenClaw Endpoints
