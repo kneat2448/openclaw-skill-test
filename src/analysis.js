@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 const dbApi = require("./db");
+const jsonStore = require("./jsonStore");
 
 const QUESTION_DIMENSIONS = [
   "Reliability",
@@ -61,15 +62,46 @@ function buildDashboard(db, projectId) {
   const members = dbApi.getMembers(db, projectId);
   const responses = dbApi.getResponses(db, projectId);
   const completion = dbApi.getCompletion(db, projectId);
+  return buildDashboardFromRecords({
+    project: {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      reviewGoal: project.review_goal,
+      status: project.status
+    },
+    members,
+    responses,
+    completion
+  });
+}
+
+function buildDashboardFromSnapshot(snapshot) {
+  if (!snapshot?.project) throw new Error("Project snapshot is missing");
+  return buildDashboardFromRecords({
+    project: {
+      id: snapshot.project.id,
+      name: snapshot.project.name,
+      description: snapshot.project.description,
+      reviewGoal: snapshot.project.review_goal || snapshot.project.reviewGoal || "",
+      status: snapshot.project.status
+    },
+    members: snapshot.members || [],
+    responses: snapshot.responses || [],
+    completion: snapshot.completion || completionFromSnapshot(snapshot)
+  });
+}
+
+function buildDashboardFromRecords({ project, members, responses, completion }) {
   const expectedPerMember = Math.max(members.length - 1, 0);
 
   const teamMatrix = members.map((member) => {
     const received = responses.filter((response) => response.reviewee_member_id === member.id);
-    const allScores = received.flatMap((response) => response.scores);
+    const allScores = received.flatMap((response) => normalizeScores(response.scores)).filter((score) => Number.isFinite(score));
     const avg = average(allScores);
     const varianceValue = variance(allScores);
     const dimensions = QUESTION_DIMENSIONS.map((dimension, index) => {
-      const values = received.map((response) => response.scores[index]).filter((score) => Number.isFinite(score));
+      const values = received.map((response) => normalizeScores(response.scores)[index]).filter((score) => Number.isFinite(score));
       const dimensionAverage = average(values);
       return {
         name: dimension,
@@ -128,7 +160,7 @@ function buildDashboard(db, projectId) {
       id: project.id,
       name: project.name,
       description: project.description,
-      reviewGoal: project.review_goal,
+      reviewGoal: project.reviewGoal,
       status: project.status
     },
     coverage: completion,
@@ -146,6 +178,25 @@ function buildDashboard(db, projectId) {
       note: "Dashboard aggregates by reviewee and does not expose named reviewer submissions."
     }
   };
+}
+
+function getDashboard(db, projectId) {
+  try {
+    const dashboard = buildDashboard(db, projectId);
+    jsonStore.writeDashboardJson(projectId, dashboard);
+    jsonStore.syncProject(db, projectId);
+    return dashboard;
+  } catch (error) {
+    const savedDashboard = jsonStore.readDashboardJson(projectId);
+    if (savedDashboard) return { ...savedDashboard, source: "json-dashboard-fallback" };
+    const snapshot = jsonStore.readProjectSnapshot(projectId);
+    if (snapshot) {
+      const dashboard = buildDashboardFromSnapshot(snapshot);
+      jsonStore.writeDashboardJson(projectId, dashboard);
+      return { ...dashboard, source: "json-project-fallback" };
+    }
+    throw error;
+  }
 }
 
 function inferThemes(responses) {
@@ -214,6 +265,28 @@ function exportAnonymousReviews(db, projectId) {
 module.exports = {
   QUESTION_DIMENSIONS,
   buildDashboard,
+  buildDashboardFromSnapshot,
+  getDashboard,
   writeDashboard,
   exportAnonymousReviews
 };
+
+function normalizeScores(scores) {
+  const parsed = Array.isArray(scores) ? scores : dbApi.parseJson(scores, []);
+  return parsed.map((score) => Number(score));
+}
+
+function completionFromSnapshot(snapshot) {
+  const assignments = snapshot.assignments || [];
+  const total = assignments.length;
+  const submitted = assignments.filter((assignment) => assignment.status === "submitted").length;
+  const open = assignments.filter((assignment) => ["pending", "in_progress", "needs_fix"].includes(assignment.status)).length;
+  const failed = assignments.filter((assignment) => assignment.status === "failed").length;
+  return {
+    total,
+    submitted,
+    open,
+    failed,
+    complete: total > 0 && submitted === total
+  };
+}

@@ -2,5 +2,6 @@ node_modules/
 .env
 data/*.db
 data/*.db-*
+data/json/*.json
 dashboard/public/data/*.json
 .openclaw/runtime/

@@ -5,6 +5,7 @@ const dbApi = require("./db");
 const { createBot } = require("./bot");
 const { createOrchestration } = require("./orchestration");
 const analysis = require("./analysis");
+const jsonStore = require("./jsonStore");
 
 const OPENCLAW_PROJECT_COMMANDS = new Set([
   "createWorkflow",
@@ -69,7 +70,13 @@ function createApp({ db, botController }) {
   app.use("/data", express.static(path.join(config.rootDir, "dashboard", "public", "data")));
 
   app.get("/api/projects", (req, res) => {
-    res.json({ ok: true, projects: dbApi.listProjects(db) });
+    try {
+      const projects = dbApi.listProjects(db);
+      jsonStore.syncProjectsIndex(db);
+      res.json({ ok: true, source: "sqlite", projects });
+    } catch (error) {
+      res.json({ ok: true, source: "json-fallback", projects: jsonStore.listProjectSnapshots() });
+    }
   });
 
   app.get("/api/projects/:projectId/status", (req, res) => {
@@ -80,7 +87,7 @@ function createApp({ db, botController }) {
     try {
       const project = dbApi.findProject(db);
       if (!project) return res.status(404).json({ ok: false, error: "No projects found" });
-      const dashboard = analysis.buildDashboard(db, project.id);
+      const dashboard = analysis.getDashboard(db, project.id);
       res.json({ ok: true, dashboard });
     } catch (error) {
       res.status(404).json({ ok: false, error: error.message });
@@ -89,11 +96,18 @@ function createApp({ db, botController }) {
 
   app.get("/api/projects/:projectId/dashboard", (req, res) => {
     try {
-      const dashboard = analysis.buildDashboard(db, Number(req.params.projectId));
+      const dashboard = analysis.getDashboard(db, Number(req.params.projectId));
       res.json({ ok: true, dashboard });
     } catch (error) {
       res.status(404).json({ ok: false, error: error.message });
     }
+  });
+
+  app.get("/api/projects/:projectId/snapshot", (req, res) => {
+    const projectId = Number(req.params.projectId);
+    const snapshot = jsonStore.readProjectSnapshot(projectId) || jsonStore.syncProject(db, projectId);
+    if (!snapshot) return res.status(404).json({ ok: false, error: `Project ${projectId} not found` });
+    res.json({ ok: true, snapshot });
   });
 
   app.post("/api/projects/:projectId/analyze", (req, res) => {

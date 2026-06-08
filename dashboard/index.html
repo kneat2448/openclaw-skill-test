@@ -327,10 +327,21 @@
       }
 
       async function fetchJson(url) {
-        const response = await fetch(url);
+        const response = await fetch(url, { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload.ok === false) throw new Error(payload.error || `Request failed: ${url}`);
         return payload;
+      }
+
+      async function fetchDashboard(projectId) {
+        try {
+          const { dashboard } = await fetchJson(`/api/projects/${projectId}/dashboard`);
+          return dashboard;
+        } catch (liveError) {
+          const response = await fetch(`/data/${projectId}.json`, { cache: "no-store" });
+          if (!response.ok) throw liveError;
+          return response.json();
+        }
       }
 
       async function loadProjects() {
@@ -364,7 +375,7 @@
         }
         document.getElementById("meta").textContent = "Loading analysis...";
         try {
-          const { dashboard } = await fetchJson(`/api/projects/${projectId}/dashboard`);
+          const dashboard = await fetchDashboard(projectId);
           renderDashboard(dashboard);
           if (String(pathProjectId) !== String(projectId)) {
             history.replaceState(null, "", `/dashboard/${projectId}`);

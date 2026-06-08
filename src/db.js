@@ -3,6 +3,7 @@ const path = require("path");
 const Database = require("better-sqlite3");
 const config = require("./config");
 const { DEFAULT_QUESTIONS } = require("./questions");
+const jsonStore = require("./jsonStore");
 
 function ensureDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -185,7 +186,9 @@ function createProject(db, input) {
     generateAssignments(db, projectId);
     return projectId;
   });
-  return create();
+  const projectId = create();
+  jsonStore.syncProject(db, projectId);
+  return projectId;
 }
 
 function registerWorkflow(db, projectId, nextRunAt = null, metadata = {}) {
@@ -219,6 +222,7 @@ function generateAssignments(db, projectId) {
     }
   });
   tx();
+  jsonStore.syncProject(db, projectId);
   return getAssignments(db, projectId);
 }
 
@@ -279,15 +283,20 @@ function markAssignmentSent(db, assignmentId, reminderDueAt = null) {
         updated_at = ?
     WHERE id = ? AND status != 'submitted'
   `).run(nowIso(), reminderDueAt, nowIso(), assignmentId);
+  const assignment = db.prepare("SELECT project_id FROM review_assignments WHERE id = ?").get(assignmentId);
+  if (assignment) jsonStore.syncProject(db, assignment.project_id);
 }
 
 function markAssignmentFailed(db, assignmentId, message) {
   db.prepare("UPDATE review_assignments SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?")
     .run(message, nowIso(), assignmentId);
+  const assignment = db.prepare("SELECT project_id FROM review_assignments WHERE id = ?").get(assignmentId);
+  if (assignment) jsonStore.syncProject(db, assignment.project_id);
 }
 
 function setProjectStatus(db, projectId, status) {
   db.prepare("UPDATE projects SET status = ?, updated_at = ? WHERE id = ?").run(status, nowIso(), projectId);
+  jsonStore.syncProject(db, projectId);
 }
 
 function saveResponse(db, assignmentId, parsed) {
@@ -313,6 +322,7 @@ function saveResponse(db, assignmentId, parsed) {
       .run(nowIso(), nowIso(), assignment.id);
   });
   tx();
+  jsonStore.syncProject(db, assignment.project_id);
 }
 
 function getResponses(db, projectId) {
@@ -352,6 +362,8 @@ function saveResult(db, projectId, dashboard) {
       dashboard_json = excluded.dashboard_json,
       created_at = excluded.created_at
   `).run(projectId, JSON.stringify(dashboard, null, 2), nowIso());
+  jsonStore.writeDashboardJson(projectId, dashboard);
+  jsonStore.syncProject(db, projectId);
 }
 
 function logSend(db, projectId, assignmentId, recipientUserId, ok, message = "") {
