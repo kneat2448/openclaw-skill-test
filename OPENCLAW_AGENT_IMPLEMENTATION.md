@@ -23,7 +23,12 @@ peer-review-workflow/
   .env.example
 ```
 
-Do not store secrets in Git. Create or update `.env` locally from `.env.example`.
+Do not store secrets in Git. Create or update `.env` locally with the onboarding wizard:
+
+```bash
+npm run setup
+npm run check-env
+```
 
 Required runtime values:
 
@@ -35,17 +40,28 @@ OPENCLAW_API_TOKEN=<shared secret for OpenClaw internal endpoint calls>
 PORT=3000
 DB_PATH=./data/peer_review.db
 APP_TIME_ZONE=Asia/Kolkata
+LATER_REMIND_MS=14400000
 AUTO_ANALYZE_ON_COMPLETE=true
 ```
 
-Project creation asks for cadence, not a one-off launch date. The end-of-project review is always mandatory. Supported cadence examples:
+Project creation asks the tech lead how long the project is, then asks for review cadence. The end-of-project review is always mandatory.
+
+Project length examples:
 
 ```text
-weekly | end: 2026-08-30T17:00:00+05:30
-biweekly | end: 2026-08-30T17:00:00+05:30
-halfway | end: 2026-08-30T17:00:00+05:30
-halfway and end | end: 2026-08-30T17:00:00+05:30
-end | end: 2026-08-30T17:00:00+05:30
+12 weeks
+3 months
+until 2026-08-30T17:00:00+05:30
+```
+
+Cadence examples:
+
+```text
+weekly
+biweekly
+halfway
+halfway and end
+end
 ```
 
 If running locally, expose `PORT` with a stable tunnel such as ngrok, localtunnel, Tailscale, or another approved OpenClaw remote-access path, then set `BASE_URL` to that public URL.
@@ -59,6 +75,7 @@ npm install
 npm run check
 npm test
 npm run smoke
+npm audit --omit=dev
 ```
 
 Expected result:
@@ -85,7 +102,7 @@ PORT=3000 npm start
 Health check:
 
 ```bash
-curl -s "$BASE_URL/"
+curl -s "$BASE_URL/health"
 ```
 
 Expected:
@@ -101,6 +118,18 @@ curl -I "$BASE_URL/dashboard/1"
 ```
 
 Expected HTTP status: `200`.
+
+Readiness check:
+
+```bash
+curl -s "$BASE_URL/ready"
+```
+
+Expected after `.env` is configured:
+
+```json
+{"ok":true,"database":"ok","openClawConfigured":true}
+```
 
 ## OpenClaw Orchestration Setup
 
@@ -124,6 +153,8 @@ All calls require:
 Authorization: Bearer $OPENCLAW_API_TOKEN
 Content-Type: application/json
 ```
+
+The service returns `503` from `/internal/openclaw/*` if `OPENCLAW_API_TOKEN` is missing or left as `change-me`.
 
 Project commands use:
 

@@ -4,8 +4,11 @@
   "description": "Telegram-first peer review workflow with OpenClaw orchestration.",
   "main": "src/server.js",
   "scripts": {
+    "setup": "node scripts/onboard.js",
     "start": "node src/server.js",
-    "check": "node --check src/bot.js && node --check src/server.js && node --check src/db.js && node --check src/orchestration.js && node --check src/analysis.js && node --check src/cadence.js",
+    "check": "node --check src/bot.js && node --check src/server.js && node --check src/db.js && node --check src/orchestration.js && node --check src/analysis.js && node --check src/cadence.js && node --check src/onboarding.js && node --check scripts/onboard.js",
+    "check-env": "node scripts/check-env.js",
+    "prod-check": "npm run check-env && npm run check && npm test && npm run smoke",
     "test": "node --test test/*.test.js",
     "test:assignments": "node --test test/assignments.test.js",
     "test:reviews": "node --test test/reviews.test.js",

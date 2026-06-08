@@ -6,8 +6,22 @@ const { createBot } = require("./bot");
 const { createOrchestration } = require("./orchestration");
 const analysis = require("./analysis");
 
+const OPENCLAW_PROJECT_COMMANDS = new Set([
+  "createWorkflow",
+  "startReviewRound",
+  "sendReminder",
+  "checkCompletion",
+  "runAnalysis",
+  "pauseReview",
+  "resumeReview"
+]);
+const OPENCLAW_GLOBAL_COMMANDS = new Set(["notifyLead", "reconcileMissedSchedules"]);
+const OPENCLAW_COMMANDS = new Set([...OPENCLAW_PROJECT_COMMANDS, ...OPENCLAW_GLOBAL_COMMANDS]);
+
 function requireOpenClawToken(req, res, next) {
-  if (!config.openClawApiToken) return next();
+  if (!config.openClawApiToken || config.openClawApiToken === "change-me") {
+    return res.status(503).json({ ok: false, error: "OpenClaw token is not configured" });
+  }
   const header = req.get("authorization") || "";
   const token = header.replace(/^Bearer\s+/i, "");
   if (token !== config.openClawApiToken) {
@@ -24,6 +38,24 @@ function createApp({ db, botController }) {
 
   app.get("/", (req, res) => {
     res.json({ ok: true, app: "peer-review-workflow" });
+  });
+
+  app.get("/health", (req, res) => {
+    res.json({ ok: true, app: "peer-review-workflow" });
+  });
+
+  app.get("/ready", (req, res) => {
+    try {
+      db.prepare("SELECT 1").get();
+      const openClawConfigured = Boolean(config.openClawApiToken && config.openClawApiToken !== "change-me");
+      res.status(openClawConfigured ? 200 : 503).json({
+        ok: openClawConfigured,
+        database: "ok",
+        openClawConfigured
+      });
+    } catch (error) {
+      res.status(503).json({ ok: false, database: "error", error: error.message });
+    }
   });
 
   app.get("/dashboard", (req, res) => {
@@ -80,13 +112,22 @@ function createApp({ db, botController }) {
   app.post("/internal/openclaw/:command", requireOpenClawToken, async (req, res) => {
     try {
       const command = req.params.command;
-      const projectId = req.body.projectId ? Number(req.body.projectId) : null;
-      if (!orchestration[command]) return res.status(404).json({ ok: false, error: "Unknown command" });
-      const result = command === "notifyLead"
-        ? await orchestration.notifyLead(req.body.message || "")
-        : command === "reconcileMissedSchedules"
-          ? await orchestration.reconcileMissedSchedules()
-        : await orchestration[command](projectId);
+      if (!OPENCLAW_COMMANDS.has(command)) return res.status(404).json({ ok: false, error: "Unknown command" });
+
+      let result;
+      if (OPENCLAW_PROJECT_COMMANDS.has(command)) {
+        const projectId = Number(req.body?.projectId);
+        if (!Number.isInteger(projectId) || projectId <= 0) {
+          return res.status(400).json({ ok: false, error: "projectId must be a positive integer" });
+        }
+        result = await orchestration[command](projectId);
+      } else if (command === "notifyLead") {
+        const message = String(req.body?.message || "").trim();
+        if (!message) return res.status(400).json({ ok: false, error: "message is required" });
+        result = await orchestration.notifyLead(message);
+      } else {
+        result = await orchestration.reconcileMissedSchedules();
+      }
       res.json(result);
     } catch (error) {
       res.status(500).json({ ok: false, error: error.message });

@@ -59,11 +59,11 @@ npm run smoke
 
 ## 2. Configure Environment
 
-Create `.env`:
+Create `.env` with the onboarding wizard:
 
 ```bash
-cp .env.example .env
-nano .env
+npm run setup
+npm run check-env
 ```
 
 Use values like:
@@ -214,6 +214,8 @@ git pull
 npm install
 npm run check
 npm test
+npm run smoke
+npm audit --omit=dev
 pm2 restart peer-review-workflow --update-env
 pm2 restart peer-review-openclaw-automation --update-env
 pm2 save
@@ -237,6 +239,8 @@ curl http://127.0.0.1:3001/api/projects/1/dashboard
 ## Security Notes
 
 - Keep `/internal/openclaw/*` protected by `OPENCLAW_API_TOKEN`.
+- The app now fails closed with `503` for `/internal/openclaw/*` if `OPENCLAW_API_TOKEN` is missing or still `change-me`.
+- Use `/health` for liveness and `/ready` for database/OpenClaw-token readiness.
 - Prefer localhost calls from OpenClaw to the app.
 - Only expose the public dashboard/app URL through HTTPS.
 - Do not commit `.env`, SQLite DB files, or generated dashboard JSON.

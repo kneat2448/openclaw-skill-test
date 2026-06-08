@@ -11,6 +11,8 @@ Base URL: `${BASE_URL}`
 
 Authorization: `Bearer ${OPENCLAW_API_TOKEN}`
 
+Readiness: `GET /ready` should return `ok: true` before OpenClaw starts recurring automation.
+
 ## Commands
 
 - `POST /internal/openclaw/createWorkflow` with `{ "projectId": 1 }`
@@ -22,6 +24,8 @@ Authorization: `Bearer ${OPENCLAW_API_TOKEN}`
 - `POST /internal/openclaw/pauseReview` with `{ "projectId": 1 }`
 - `POST /internal/openclaw/resumeReview` with `{ "projectId": 1 }`
 - `POST /internal/openclaw/reconcileMissedSchedules` with `{}`
+
+The service returns `503` for all `/internal/openclaw/*` calls when `OPENCLAW_API_TOKEN` is missing or still set to `change-me`. Project commands require a positive integer `projectId`; `notifyLead` requires a non-empty `message`.
 
 ## Ownership
 

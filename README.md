@@ -15,16 +15,24 @@ Telegram-first peer review MVP with SQLite storage, anonymous dashboard output, 
 
 ```bash
 npm install
-copy .env.example .env
+npm run setup
+npm run check-env
+npm run prod-check
+npm audit --omit=dev
 npm start
 ```
 
-Required `.env` values for live Telegram/OpenClaw use:
+The onboarding wizard asks for:
 
 - `TELEGRAM_BOT_TOKEN`
 - `TECH_LEAD_USER_ID`
 - `BASE_URL`
+- `PORT`
+- `DB_PATH`
+- `APP_TIME_ZONE`
+- `LATER_REMIND_MS`
 - `OPENCLAW_API_TOKEN`
+- `AUTO_ANALYZE_ON_COMPLETE`
 
 Without a Telegram token, the app still starts and logs outgoing bot messages to the console.
 
@@ -93,6 +101,7 @@ weekly | start: 2026-06-10T10:00:00+05:30
 ## OpenClaw Endpoints
 
 OpenClaw should call `POST /internal/openclaw/:command` with `Authorization: Bearer $OPENCLAW_API_TOKEN`.
+The internal OpenClaw endpoint fails closed with `503` if `OPENCLAW_API_TOKEN` is missing or left as `change-me`.
 
 Supported commands:
 
@@ -107,6 +116,13 @@ Supported commands:
 - `reconcileMissedSchedules`
 
 See [openclaw/peer-review-workflow.md](openclaw/peer-review-workflow.md) for the orchestration contract.
+
+Production health checks:
+
+```bash
+curl "$BASE_URL/health"
+curl "$BASE_URL/ready"
+```
 
 For a full prompt/instruction file that can be handed to an OpenClaw agent, use [OPENCLAW_AGENT_IMPLEMENTATION.md](OPENCLAW_AGENT_IMPLEMENTATION.md).
 
