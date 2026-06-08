@@ -50,6 +50,20 @@ test("health and readiness report service state", async () => {
   }
 });
 
+test("storage debug endpoint reports database and JSON locations", async () => {
+  const db = tempDb();
+  const app = createApp({ db, botController: null });
+  await withServer(app, async (baseUrl) => {
+    const { status, body } = await requestJson(baseUrl, "/api/debug/storage");
+
+    assert.equal(status, 200);
+    assert.equal(body.ok, true);
+    assert.ok(body.dbPath);
+    assert.ok(body.jsonDir);
+    assert.ok(Number.isInteger(body.projectCount));
+  });
+});
+
 test("OpenClaw endpoints fail closed without a configured token", async () => {
   const db = tempDb();
   const originalToken = config.openClawApiToken;

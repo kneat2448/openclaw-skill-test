@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 const dbApi = require("./db");
@@ -56,6 +57,41 @@ function createApp({ db, botController }) {
       });
     } catch (error) {
       res.status(503).json({ ok: false, database: "error", error: error.message });
+    }
+  });
+
+  app.get("/api/debug/storage", (req, res) => {
+    try {
+      const projects = dbApi.listProjects(db);
+      const snapshotProjects = jsonStore.listProjectSnapshots();
+      const jsonDir = jsonStore.jsonRoot();
+      const dashboardDir = jsonStore.dashboardDataRoot();
+      res.json({
+        ok: true,
+        cwd: process.cwd(),
+        rootDir: config.rootDir,
+        dbPath: config.dbPath,
+        dbExists: fs.existsSync(config.dbPath),
+        baseUrl: config.baseUrl,
+        port: config.port,
+        projectCount: projects.length,
+        latestProjects: projects.slice(0, 10),
+        jsonDir,
+        jsonDirExists: fs.existsSync(jsonDir),
+        jsonProjectCount: snapshotProjects.length,
+        jsonProjects: snapshotProjects.slice(0, 10),
+        dashboardDir,
+        dashboardDirExists: fs.existsSync(dashboardDir)
+      });
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        cwd: process.cwd(),
+        rootDir: config.rootDir,
+        dbPath: config.dbPath,
+        dbExists: fs.existsSync(config.dbPath),
+        error: error.message
+      });
     }
   });
 
