@@ -118,6 +118,55 @@ function readDashboardJson(projectId) {
   return readJson(dashboardFile(projectId), null);
 }
 
+function listDashboardProjects() {
+  try {
+    return fs.readdirSync(dashboardDataRoot())
+      .filter((file) => /^\d+\.json$/.test(file))
+      .map((file) => readDashboardJson(path.basename(file, ".json")))
+      .filter((dashboard) => dashboard?.project?.id != null)
+      .map((dashboard) => ({
+        id: dashboard.project.id,
+        name: dashboard.project.name,
+        status: dashboard.project.status || "analyzed",
+        schedule_at: null,
+        source: "dashboard-json"
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function mergeProjects(...projectLists) {
+  const byId = new Map();
+  for (const list of projectLists) {
+    for (const project of list || []) {
+      const normalized = projectFromSnapshot(project);
+      if (!normalized || normalized.id == null) continue;
+      const id = Number(normalized.id);
+      const existing = byId.get(id) || {};
+      byId.set(id, {
+        ...projectFromSnapshot(existing),
+        ...normalized,
+        id
+      });
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => Number(b.id) - Number(a.id));
+}
+
+function projectFromSnapshot(project) {
+  if (project.project) {
+    return {
+      id: project.project.id,
+      name: project.project.name,
+      status: project.project.status,
+      schedule_at: project.project.schedule_at || project.project.scheduleAt || null,
+      source: project.source || "project-json"
+    };
+  }
+  return project;
+}
+
 function parseJson(value, fallback) {
   if (value == null || value === "") return fallback;
   if (typeof value !== "string") return value;
@@ -151,5 +200,7 @@ module.exports = {
   listProjectSnapshots,
   readProjectSnapshot,
   writeDashboardJson,
-  readDashboardJson
+  readDashboardJson,
+  listDashboardProjects,
+  mergeProjects
 };

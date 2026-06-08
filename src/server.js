@@ -70,12 +70,22 @@ function createApp({ db, botController }) {
   app.use("/data", express.static(path.join(config.rootDir, "dashboard", "public", "data")));
 
   app.get("/api/projects", (req, res) => {
+    const snapshotProjects = jsonStore.listProjectSnapshots();
+    const dashboardProjects = jsonStore.listDashboardProjects();
     try {
       const projects = dbApi.listProjects(db);
       jsonStore.syncProjectsIndex(db);
-      res.json({ ok: true, source: "sqlite", projects });
+      res.json({
+        ok: true,
+        source: "merged",
+        projects: jsonStore.mergeProjects(projects, snapshotProjects, dashboardProjects)
+      });
     } catch (error) {
-      res.json({ ok: true, source: "json-fallback", projects: jsonStore.listProjectSnapshots() });
+      res.json({
+        ok: true,
+        source: "json-fallback",
+        projects: jsonStore.mergeProjects(snapshotProjects, dashboardProjects)
+      });
     }
   });
 

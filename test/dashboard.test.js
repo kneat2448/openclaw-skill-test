@@ -33,3 +33,15 @@ test("dashboard analysis can be rebuilt from JSON project snapshot", () => {
   assert.equal(dashboard.teamMatrix.length, 3);
   assert.equal(dashboard.anonymity.reviewerIdentitiesExposed, false);
 });
+
+test("project lists merge sqlite and JSON dashboard records", () => {
+  const merged = jsonStore.mergeProjects(
+    [{ id: 1, name: "SQLite", status: "scheduled" }],
+    [{ project: { id: 2, name: "Snapshot", status: "complete" } }],
+    [{ id: 1, name: "SQLite Dashboard", status: "analyzed" }]
+  );
+
+  assert.deepEqual(merged.map((project) => project.id), [2, 1]);
+  assert.equal(merged.find((project) => project.id === 1).name, "SQLite Dashboard");
+  assert.equal(merged.find((project) => project.id === 2).name, "Snapshot");
+});
