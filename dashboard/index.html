@@ -333,14 +333,19 @@
         return payload;
       }
 
-      async function fetchDashboard(projectId) {
+      async function fetchDashboard(project) {
+        const projectId = project.id;
         try {
           const { dashboard } = await fetchJson(`/api/projects/${projectId}/dashboard`);
           return dashboard;
         } catch (liveError) {
           const response = await fetch(`/data/${projectId}.json`, { cache: "no-store" });
           if (!response.ok) throw liveError;
-          return response.json();
+          const dashboard = await response.json();
+          if (!dashboard?.project || String(dashboard.project.id) !== String(projectId) || dashboard.project.name !== project.name) {
+            throw new Error(`Stored dashboard JSON for project #${projectId} is stale. Run analysis again for ${project.name}.`);
+          }
+          return dashboard;
         }
       }
 
@@ -348,7 +353,7 @@
         const { projects } = await fetchJson("/api/projects");
         const validProjects = projects.filter((project) => project && project.id != null);
         projectSelect.innerHTML = validProjects.map((project) => (
-          `<option value="${project.id}">#${project.id} ${escapeHtml(project.name)} (${escapeHtml(project.status)})</option>`
+          `<option value="${project.id}" data-name="${escapeHtml(project.name)}" data-status="${escapeHtml(project.status)}">#${project.id} ${escapeHtml(project.name)} (${escapeHtml(project.status)})</option>`
         )).join("");
 
         if (!validProjects.length) {
@@ -361,21 +366,25 @@
 
         projectSelect.disabled = false;
         refreshButton.disabled = false;
-        const selectedId = pathProjectId && validProjects.some((project) => String(project.id) === String(pathProjectId))
-          ? pathProjectId
-          : validProjects[0].id;
-        projectSelect.value = selectedId;
-        await loadDashboard(selectedId);
+        const selectedProject = pathProjectId
+          ? validProjects.find((project) => String(project.id) === String(pathProjectId)) || validProjects[0]
+          : validProjects[0];
+        projectSelect.value = selectedProject.id;
+        await loadDashboard(selectedProject);
       }
 
-      async function loadDashboard(projectId) {
+      async function loadDashboard(projectOrId) {
+        const project = typeof projectOrId === "object"
+          ? projectOrId
+          : currentProjectFromSelect();
+        const projectId = project?.id;
         if (!projectId) {
           renderEmpty("Select a project to load dashboard analysis.");
           return;
         }
         document.getElementById("meta").textContent = "Loading analysis...";
         try {
-          const dashboard = await fetchDashboard(projectId);
+          const dashboard = await fetchDashboard(project);
           renderDashboard(dashboard);
           if (String(pathProjectId) !== String(projectId)) {
             history.replaceState(null, "", `/dashboard/${projectId}`);
@@ -502,12 +511,22 @@
       }
 
       projectSelect.addEventListener("change", () => {
-        if (projectSelect.value) loadDashboard(projectSelect.value);
+        if (projectSelect.value) loadDashboard(currentProjectFromSelect());
       });
       refreshButton.addEventListener("click", () => {
-        if (projectSelect.value) loadDashboard(projectSelect.value);
+        if (projectSelect.value) loadDashboard(currentProjectFromSelect());
       });
       loadProjects().catch((error) => renderEmpty(error.message));
+
+      function currentProjectFromSelect() {
+        const selected = projectSelect.selectedOptions[0];
+        if (!selected?.value) return null;
+        return {
+          id: selected.value,
+          name: selected.dataset.name || selected.textContent.replace(/^#\d+\s+/, "").replace(/\s+\([^)]+\)$/, ""),
+          status: selected.dataset.status || ""
+        };
+      }
     </script>
   </body>
 </html>

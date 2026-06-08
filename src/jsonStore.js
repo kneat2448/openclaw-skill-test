@@ -49,6 +49,15 @@ function syncProjectsIndex(db) {
   return projects;
 }
 
+function syncAllProjects(db) {
+  const projects = syncProjectsIndex(db);
+  for (const project of projects) {
+    const snapshot = buildProjectSnapshot(db, project.id);
+    if (snapshot) writeJson(projectFile(project.id), snapshot);
+  }
+  return projects;
+}
+
 function syncProject(db, projectId) {
   const snapshot = buildProjectSnapshot(db, projectId);
   if (!snapshot) return null;
@@ -103,7 +112,15 @@ function buildProjectSnapshot(db, projectId) {
 
 function listProjectSnapshots() {
   const index = readJson(path.join(jsonRoot(), "projects.json"), { projects: [] });
-  return index.projects || [];
+  const indexProjects = index.projects || [];
+  const fileProjects = listProjectSnapshotFiles().map((snapshot) => ({
+    id: snapshot.project.id,
+    name: snapshot.project.name,
+    status: snapshot.project.status,
+    schedule_at: snapshot.project.schedule_at,
+    source: "project-json"
+  }));
+  return mergeProjects(indexProjects, fileProjects);
 }
 
 function readProjectSnapshot(projectId) {
@@ -118,19 +135,12 @@ function readDashboardJson(projectId) {
   return readJson(dashboardFile(projectId), null);
 }
 
-function listDashboardProjects() {
+function listProjectSnapshotFiles() {
   try {
-    return fs.readdirSync(dashboardDataRoot())
-      .filter((file) => /^\d+\.json$/.test(file))
-      .map((file) => readDashboardJson(path.basename(file, ".json")))
-      .filter((dashboard) => dashboard?.project?.id != null)
-      .map((dashboard) => ({
-        id: dashboard.project.id,
-        name: dashboard.project.name,
-        status: dashboard.project.status || "analyzed",
-        schedule_at: null,
-        source: "dashboard-json"
-      }));
+    return fs.readdirSync(jsonRoot())
+      .filter((file) => /^project-\d+\.json$/.test(file))
+      .map((file) => readJson(path.join(jsonRoot(), file), null))
+      .filter((snapshot) => snapshot?.project?.id != null);
   } catch {
     return [];
   }
@@ -195,12 +205,13 @@ module.exports = {
   jsonRoot,
   dashboardDataRoot,
   syncProjectsIndex,
+  syncAllProjects,
   syncProject,
   buildProjectSnapshot,
   listProjectSnapshots,
   readProjectSnapshot,
   writeDashboardJson,
   readDashboardJson,
-  listDashboardProjects,
+  listProjectSnapshotFiles,
   mergeProjects
 };

@@ -71,20 +71,18 @@ function createApp({ db, botController }) {
 
   app.get("/api/projects", (req, res) => {
     const snapshotProjects = jsonStore.listProjectSnapshots();
-    const dashboardProjects = jsonStore.listDashboardProjects();
     try {
-      const projects = dbApi.listProjects(db);
-      jsonStore.syncProjectsIndex(db);
+      const projects = jsonStore.syncAllProjects(db);
       res.json({
         ok: true,
         source: "merged",
-        projects: jsonStore.mergeProjects(projects, snapshotProjects, dashboardProjects)
+        projects: jsonStore.mergeProjects(projects, snapshotProjects)
       });
     } catch (error) {
       res.json({
         ok: true,
         source: "json-fallback",
-        projects: jsonStore.mergeProjects(snapshotProjects, dashboardProjects)
+        projects: jsonStore.mergeProjects(snapshotProjects)
       });
     }
   });
